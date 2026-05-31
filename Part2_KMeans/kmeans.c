@@ -108,7 +108,8 @@ void accumulateClusters(PointSet *data, double *sumX, double *sumY, int *counts)
 
 
 // Updates centroids and returns the maximum movement distance
-double updateCentroids(Centroids *centroids, double *sumX, double *sumY, int *counts) {
+double updateCentroids(Centroids *centroids, double *sumX, double *sumY, int *counts, double* sharedMaxMovement) {
+    //simd use?
     int k = centroids->k;
     double maxMovement = 0.0;
     
@@ -129,32 +130,52 @@ double updateCentroids(Centroids *centroids, double *sumX, double *sumY, int *co
     return maxMovement;
 }
 
-
 int runKMeans(PointSet *data, Centroids *centroids, int maxIters, double tolerance) {
     int k = centroids->k;
-
+    
     double *sumX = (double *)malloc((size_t)k * sizeof(double));
     double *sumY = (double *)malloc((size_t)k * sizeof(double));
     int *counts = (int *)malloc((size_t)k * sizeof(int));
+    
+    const double tolSquared = tolerance * tolerance;
+    int final_iter = 0;
+    double sharedMaxMovement = 0.0;
 
-    double tolSquared = tolerance * tolerance;
-    int iter = 0;
+    // Create threads ONCE to avoid overhead
+    #pragma omp parallel
+    {
+        // iter is private to each thread
+        int iter; 
+        for (iter = 0; iter < maxIters; iter++) { 
 
-    for (iter = 0; iter < maxIters; iter++) { // Cannot parallelize this loop due to data dependency
-        
-        assignPointsToClusters(data, centroids);
-        resetAccumulators(k, sumX, sumY, counts);
-        accumulateClusters(data, sumX, sumY, counts);
-        double maxMovement = updateCentroids(centroids, sumX, sumY, counts);
+            assignPointsToClusters(data, centroids);
+            #pragma omp barrier
 
-        if (maxMovement < tolSquared) {
-            iter++;
-            break;
+            resetAccumulators(k, sumX, sumY, counts);
+            #pragma omp barrier
+            accumulateClusters(data, sumX, sumY, counts);
+            #pragma omp barrier
+            updateCentroids(centroids, sumX, sumY, counts, &sharedMaxMovement);
+            #pragma omp barrier
+
+            // All threads check the convergence condition simultaneously
+            if (sharedMaxMovement < tolSquared) {
+                // Count the current iteration before breaking out of the loop
+                iter++; 
+                break; 
+            }
+        }
+
+        // Only one thread safely updates the final count after the loop ends
+        #pragma omp single
+        {
+            final_iter = iter;
         }
     }
 
     free(sumX);
     free(sumY);
     free(counts);
-    return iter;
+    
+    return final_iter;
 }
