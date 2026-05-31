@@ -17,19 +17,12 @@
 int num_t = 1; //
 
 PointSet *createPointSet(int numPoints)
+// TODO : parrllel this?
 {
     PointSet *p = (PointSet *)malloc(sizeof(PointSet));
     p->numPoints = numPoints;
     p->points = (Point *)malloc((size_t)numPoints * sizeof(Point));
     p->assignments = (int *)malloc((size_t)numPoints * sizeof(int));
-
-    // num_t = numPoints / 5000;
-    // // Ensure at least 1 thread to prevent OpenMP errors
-    // if (num_t < 1) {
-    //     num_t = 1;
-    // }
-
-    // #pragma omp parallel for num_threads(num_t)
     for (int i = 0; i < numPoints; i++)
     {
         p->assignments[i] = 0;
@@ -70,6 +63,7 @@ static inline double squaredDistance(Point a, Point b)
 }
 
 // Assigns each point to the nearest centroid
+// TODO : parrllel this
 void assignPointsToClusters(PointSet *data, Centroids *centroids)
 {
     int n = data->numPoints;
@@ -94,6 +88,7 @@ void assignPointsToClusters(PointSet *data, Centroids *centroids)
 }
 
 // Resets the accumulation arrays
+// TODO : parrllel this
 void resetAccumulators(int k, double *sumX, double *sumY, int *counts)
 {
     for (int c = 0; c < k; c++)
@@ -105,10 +100,11 @@ void resetAccumulators(int k, double *sumX, double *sumY, int *counts)
 }
 
 // Accumulates point coordinates into their assigned clusters
-void accumulateClusters(PointSet *data, double *sumX, double *sumY, int *counts)
+
+void accumulateClusters(PointSet *data, double *sumX, double *sumY, int *counts, int k)
 {
     int n = data->numPoints;
-
+#pragma omp for reduction(+ : sumX[ : k], sumY[ : k], counts[ : k])
     for (int i = 0; i < n; i++)
     {
         int c = data->assignments[i];
@@ -148,7 +144,7 @@ double updateCentroids(Centroids *centroids, double *sumX, double *sumY, int *co
             *sharedMaxMovement = localMaxMovement;
         }
     }
-    #pragma omp barrier
+#pragma omp barrier
     return *sharedMaxMovement;
 }
 
@@ -173,11 +169,15 @@ int runKMeans(PointSet *data, Centroids *centroids, int maxIters, double toleran
         {
 
             assignPointsToClusters(data, centroids);
-#pragma omp barrier
 
-            resetAccumulators(k, sumX, sumY, counts);
 #pragma omp barrier
-            accumulateClusters(data, sumX, sumY, counts);
+#pragma omp single
+            {
+                resetAccumulators(k, sumX, sumY, counts);
+            }
+            
+#pragma omp barrier
+            accumulateClusters(data, sumX, sumY, counts, k);
 #pragma omp barrier
             updateCentroids(centroids, sumX, sumY, counts, &sharedMaxMovement);
 #pragma omp barrier
