@@ -1,0 +1,40 @@
+Gaussian Blur scalability + correctness report
+Blur radius: 7, pixel tolerance: 1
+Max OMP threads available: 16
+Images scanned: 4 in images/
+
+=== large.jpg (2400x1800, radius=7) ===
+Threads  | Time(s)    | Speedup  | Efficiency | Correctness
+---------+------------+----------+------------+----------------------
+1        | 0.9932     | 1.000    | 1.000      | reference (blur OK)
+2        | 1.0199     | 0.974    | 0.487      | OK (matches T=1)
+4        | 1.0180     | 0.976    | 0.244      | OK (matches T=1)
+8        | 0.9820     | 1.011    | 0.126      | OK (matches T=1)
+16       | 0.9797     | 1.014    | 0.063      | OK (matches T=1)
+
+=== medium.jpg (1600x1200, radius=7) ===
+Threads  | Time(s)    | Speedup  | Efficiency | Correctness
+---------+------------+----------+------------+----------------------
+1        | 0.4382     | 1.000    | 1.000      | reference (blur OK)
+2        | 0.4304     | 1.018    | 0.509      | OK (matches T=1)
+4        | 0.4502     | 0.973    | 0.243      | OK (matches T=1)
+8        | 0.4442     | 0.986    | 0.123      | OK (matches T=1)
+16       | 0.4478     | 0.978    | 0.061      | OK (matches T=1)
+
+=== small.jpg (800x600, radius=7) ===
+Threads  | Time(s)    | Speedup  | Efficiency | Correctness
+---------+------------+----------+------------+----------------------
+1        | 0.1141     | 1.000    | 1.000      | reference (blur OK)
+2        | 0.1050     | 1.086    | 0.543      | OK (matches T=1)
+4        | 0.1054     | 1.082    | 0.271      | OK (matches T=1)
+8        | 0.1054     | 1.082    | 0.135      | OK (matches T=1)
+16       | 0.1039     | 1.099    | 0.069      | OK (matches T=1)
+
+=== xlarge.jpg (3200x2400, radius=7) ===
+Threads  | Time(s)    | Speedup  | Efficiency | Correctness
+---------+------------+----------+------------+----------------------
+1        | 1.8239     | 1.000    | 1.000      | reference (blur OK)
+2        | 1.8793     | 0.971    | 0.485      | OK (matches T=1)
+4        | 1.8175     | 1.004    | 0.251      | OK (matches T=1)
+8        | 1.7927     | 1.017    | 0.127      | OK (matches T=1)
+16       | 1.8075     | 1.009    | 0.063      | OK (matches T=1)
