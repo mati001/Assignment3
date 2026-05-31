@@ -14,7 +14,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <omp.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -22,7 +21,6 @@
 
 
 // Function to load an image
-//one time run
 Image *loadImage(const char *filename) {
     int width, height, channels;
     unsigned char *data = stbi_load(filename, &width, &height, &channels, 4); // 4 means we want the image in RGBA format
@@ -36,7 +34,6 @@ Image *loadImage(const char *filename) {
     image->height = height;
     image->pixels = (RGBA *)malloc(width * height * sizeof(RGBA));
 
-    #pragma omp parallel for //shouldnt change much but either way...
     for (int i = 0; i < width * height; i++) {
         image->pixels[i].r = data[4 * i + 0];
         image->pixels[i].g = data[4 * i + 1];
@@ -49,11 +46,9 @@ Image *loadImage(const char *filename) {
 }
 
 // Function to save an image
-//one time run
 void saveImage(const char *filename, Image *image) {
     unsigned char *data = (unsigned char *)malloc(image->width * image->height * 4);
- 
-    #pragma omp parallel for //shouldnt change much but either way...
+
     for (int i = 0; i < image->width * image->height; i++) {
         data[4 * i + 0] = image->pixels[i].r;
         data[4 * i + 1] = image->pixels[i].g;
@@ -70,7 +65,6 @@ void saveImage(const char *filename, Image *image) {
     free(data);
 }
 
-//one time run
 void createGaussianKernel(int radius, double sigma, double **kernel, double *sum) {
     int kernelWidth = (2 * radius) + 1;
     *sum = 0.0;
@@ -108,9 +102,8 @@ Image *createBlurredImage(int radius, Image *image) {
 
     createGaussianKernel(radius, sigma, &kernel, &sum);
 
-    #pragma omp parallel for
-    for (int y = radius; y < height - radius; y++) {
-        for (int x = radius; x < width - radius; x++) {
+    for (int x = radius; x < width - radius; x++) {
+        for (int y = radius; y < height - radius; y++) {
             double redValue = 0.0;
             double greenValue = 0.0;
             double blueValue = 0.0;

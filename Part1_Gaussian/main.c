@@ -202,9 +202,22 @@ static void benchmarkImage(const char *filename, FILE *log) {
         int threads = THREAD_COUNTS[t];
         omp_set_num_threads(threads);
 
-        double t0 = omp_get_wtime();
-        Image *blurred = createBlurredImage(BLUR_RADIUS, input);
-        double elapsed = omp_get_wtime() - t0;
+        double total_elapsed = 0.0;
+        Image *final_blurred = NULL;
+
+        for (int run = 0; run < 10; run++) {
+            double t0 = omp_get_wtime();
+            Image *blurred = createBlurredImage(BLUR_RADIUS, input);
+            total_elapsed += (omp_get_wtime() - t0);
+            
+            if (run == 0) {
+                final_blurred = blurred;
+            } else {
+                freeImage(blurred);
+            }
+        }
+        double elapsed = total_elapsed / 30.0;
+        Image *blurred = final_blurred;
 
         char correctness[64];
         if (t == 0) {
