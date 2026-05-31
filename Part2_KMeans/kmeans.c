@@ -11,15 +11,24 @@
  */
 
 #include "kmeans.h"
-
+#include <omp.h>
 #include <stdlib.h>
 #include <math.h>
+int num_t = 1; //
 
 PointSet *createPointSet(int numPoints) {
     PointSet *p = (PointSet *)malloc(sizeof(PointSet));
     p->numPoints = numPoints;
     p->points = (Point *)malloc((size_t)numPoints * sizeof(Point));
     p->assignments = (int *)malloc((size_t)numPoints * sizeof(int));
+    
+    // num_t = numPoints / 5000;    
+    // // Ensure at least 1 thread to prevent OpenMP errors
+    // if (num_t < 1) {
+    //     num_t = 1;
+    // }
+
+    // #pragma omp parallel for num_threads(num_t)
     for (int i = 0; i < numPoints; i++) {
         p->assignments[i] = 0;
     }
@@ -52,8 +61,76 @@ static inline double squaredDistance(Point a, Point b) {
     return dx * dx + dy * dy;
 }
 
-int runKMeans(PointSet *data, Centroids *centroids, int maxIters, double tolerance) {
+// Assigns each point to the nearest centroid
+void assignPointsToClusters(PointSet *data, Centroids *centroids) {
     int n = data->numPoints;
+    int k = centroids->k;
+    
+    for (int i = 0; i < n; i++) {
+        double bestDist = squaredDistance(data->points[i], centroids->centroids[0]);
+        int bestCluster = 0;
+        
+        for (int c = 1; c < k; c++) {
+            double d = squaredDistance(data->points[i], centroids->centroids[c]);
+            if (d < bestDist) {
+                bestDist = d;
+                bestCluster = c;
+            }
+        }
+        data->assignments[i] = bestCluster;
+    }
+}
+
+
+// Resets the accumulation arrays
+void resetAccumulators(int k, double *sumX, double *sumY, int *counts) {
+    for (int c = 0; c < k; c++) {
+        sumX[c] = 0.0;
+        sumY[c] = 0.0;
+        counts[c] = 0;
+    }
+}
+
+
+
+// Accumulates point coordinates into their assigned clusters
+void accumulateClusters(PointSet *data, double *sumX, double *sumY, int *counts) {
+    int n = data->numPoints;
+    
+    for (int i = 0; i < n; i++) {
+        int c = data->assignments[i];
+        sumX[c] += data->points[i].x;
+        sumY[c] += data->points[i].y;
+        counts[c]++;
+    }
+}
+
+
+
+// Updates centroids and returns the maximum movement distance
+double updateCentroids(Centroids *centroids, double *sumX, double *sumY, int *counts) {
+    int k = centroids->k;
+    double maxMovement = 0.0;
+    
+    for (int c = 0; c < k; c++) {
+        if (counts[c] == 0) continue;
+        
+        Point updated;
+        updated.x = sumX[c] / counts[c];
+        updated.y = sumY[c] / counts[c];
+        
+        double mv = squaredDistance(centroids->centroids[c], updated);
+        if (mv > maxMovement) {
+            maxMovement = mv;
+        }
+        centroids->centroids[c] = updated;
+    }
+    
+    return maxMovement;
+}
+
+
+int runKMeans(PointSet *data, Centroids *centroids, int maxIters, double tolerance) {
     int k = centroids->k;
 
     double *sumX = (double *)malloc((size_t)k * sizeof(double));
@@ -63,47 +140,12 @@ int runKMeans(PointSet *data, Centroids *centroids, int maxIters, double toleran
     double tolSquared = tolerance * tolerance;
     int iter = 0;
 
-    for (iter = 0; iter < maxIters; iter++) {
-        /* Assignment step: nearest centroid for every point. */
-        for (int i = 0; i < n; i++) {
-            double bestDist = squaredDistance(data->points[i], centroids->centroids[0]);
-            int bestCluster = 0;
-            for (int c = 1; c < k; c++) {
-                double d = squaredDistance(data->points[i], centroids->centroids[c]);
-                if (d < bestDist) {
-                    bestDist = d;
-                    bestCluster = c;
-                }
-            }
-            data->assignments[i] = bestCluster;
-        }
-
-        /* Reset per-cluster accumulators. */
-        for (int c = 0; c < k; c++) {
-            sumX[c] = 0.0;
-            sumY[c] = 0.0;
-            counts[c] = 0;
-        }
-
-        /* Accumulate into each cluster. */
-        for (int i = 0; i < n; i++) {
-            int c = data->assignments[i];
-            sumX[c] += data->points[i].x;
-            sumY[c] += data->points[i].y;
-            counts[c]++;
-        }
-
-        /* Recompute centroids; track largest movement for convergence. */
-        double maxMovement = 0.0;
-        for (int c = 0; c < k; c++) {
-            if (counts[c] == 0) continue;
-            Point updated;
-            updated.x = sumX[c] / counts[c];
-            updated.y = sumY[c] / counts[c];
-            double mv = squaredDistance(centroids->centroids[c], updated);
-            if (mv > maxMovement) maxMovement = mv;
-            centroids->centroids[c] = updated;
-        }
+    for (iter = 0; iter < maxIters; iter++) { // Cannot parallelize this loop due to data dependency
+        
+        assignPointsToClusters(data, centroids);
+        resetAccumulators(k, sumX, sumY, counts);
+        accumulateClusters(data, sumX, sumY, counts);
+        double maxMovement = updateCentroids(centroids, sumX, sumY, counts);
 
         if (maxMovement < tolSquared) {
             iter++;
