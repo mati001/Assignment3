@@ -27,6 +27,7 @@ PointSet *createPointSet(int numPoints)
     {
         p->assignments[i] = 0;
     }
+    num_t = numPoints/5000;
     return p;
 }
 
@@ -91,6 +92,7 @@ void assignPointsToClusters(PointSet *data, Centroids *centroids)
 // TODO : parrllel this
 void resetAccumulators(int k, double *sumX, double *sumY, int *counts)
 {
+#pragma omp for schedule(dynamic)
     for (int c = 0; c < k; c++)
     {
         sumX[c] = 0.0;
@@ -99,8 +101,9 @@ void resetAccumulators(int k, double *sumX, double *sumY, int *counts)
     }
 }
 
-// Accumulates point coordinates into their assigned clusters
 
+
+// Accumulates point coordinates into their assigned clusters
 void accumulateClusters(PointSet *data, double *sumX, double *sumY, int *counts, int k)
 {
     int n = data->numPoints;
@@ -171,11 +174,9 @@ int runKMeans(PointSet *data, Centroids *centroids, int maxIters, double toleran
             assignPointsToClusters(data, centroids);
 
 #pragma omp barrier
-#pragma omp single
             {
                 resetAccumulators(k, sumX, sumY, counts);
             }
-            
 #pragma omp barrier
             accumulateClusters(data, sumX, sumY, counts, k);
 #pragma omp barrier
