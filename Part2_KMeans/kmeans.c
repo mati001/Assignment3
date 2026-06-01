@@ -70,6 +70,7 @@ void assignPointsToClusters(PointSet *data, Centroids *centroids)
     int n = data->numPoints;
     int k = centroids->k;
 
+    #pragma omp for schedule(static)
     for (int i = 0; i < n; i++)
     {
         double bestDist = squaredDistance(data->points[i], centroids->centroids[0]);
@@ -87,12 +88,11 @@ void assignPointsToClusters(PointSet *data, Centroids *centroids)
         data->assignments[i] = bestCluster;
     }
 }
-
 // Resets the accumulation arrays
-// TODO : parrllel this
+
 void resetAccumulators(int k, double *sumX, double *sumY, int *counts)
 {
-#pragma omp for schedule(dynamic)
+#pragma omp simd
     for (int c = 0; c < k; c++)
     {
         sumX[c] = 0.0;
@@ -170,9 +170,7 @@ int runKMeans(PointSet *data, Centroids *centroids, int maxIters, double toleran
         int iter;
         for (iter = 0; iter < maxIters; iter++)
         {
-
             assignPointsToClusters(data, centroids);
-
 #pragma omp barrier
             {
                 resetAccumulators(k, sumX, sumY, counts);
@@ -190,12 +188,19 @@ int runKMeans(PointSet *data, Centroids *centroids, int maxIters, double toleran
                 iter++;
                 break;
             }
+
+#pragma omp barrier
+#pragma omp single
+            {
+                sharedMaxMovement = 0.0;
+            }
         }
 
 // Only one thread safely updates the final count after the loop ends
 #pragma omp single
         {
             final_iter = iter;
+
         }
     }
 
