@@ -15,25 +15,6 @@ TreeNode *createNode(int data)
     return node;
 }
 
-// TODO add a lock
-TreeNode *insertNode(TreeNode *root, int data)
-{
-    if (root == NULL)
-    {
-        return createNode(data);
-    }
-    if (data < root->data)
-    {
-        root->left = insertNode(root->left, data);
-    }
-    else if (data > root->data)
-    {
-        root->right = insertNode(root->right, data);
-    }
-    /* If data == root->data, we typically don't insert duplicates in a standard BST */
-    return root;
-}
-
 TreeNode *findMin(TreeNode *root)
 {
     if (root == NULL)
@@ -49,18 +30,6 @@ TreeNode *findMin(TreeNode *root)
     }
     omp_unset_lock(&root->lock);
     return root;
-}
-
-/* Public API function */
-bool searchNode(TreeNode *root, int data)
-{
-    if (root == NULL)
-    {
-        return false;
-    }
-    // Lock the root node before passing it to the real function
-    omp_set_lock(&root->lock);
-    return searchNodeHelper(root, data);
 }
 
 bool searchNodeHelper(TreeNode *root, int data)
@@ -97,7 +66,40 @@ bool searchNodeHelper(TreeNode *root, int data)
         return searchNodeHelper(root->right, data);
     }
 }
+/* Public API function */
+bool searchNode(TreeNode *root, int data)
+{
+    if (root == NULL)
+    {
+        return false;
+    }
+    // Lock the root node before passing it to the real function
+    omp_set_lock(&root->lock);
+    return searchNodeHelper(root, data);
+}
 
+
+
+// TODO add a lock
+TreeNode *insertNode(TreeNode *root, int data)
+{
+    if (root == NULL)
+    {
+        return createNode(data);
+    }
+    if (data < root->data)
+    {
+        root->left = insertNode(root->left, data);
+    }
+    else if (data > root->data)
+    {
+        root->right = insertNode(root->right, data);
+    }
+    /* If data == root->data, we typically don't insert duplicates in a standard BST */
+    return root;
+}
+
+// TODO add a lock
 TreeNode *deleteNode(TreeNode *root, int data)
 {
     if (root == NULL)
@@ -140,6 +142,7 @@ TreeNode *deleteNode(TreeNode *root, int data)
     return root;
 }
 
+//TODO: add a lock
 void inorderTraversal(TreeNode *root)
 {
     if (root != NULL)
