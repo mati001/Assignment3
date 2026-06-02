@@ -15,12 +15,13 @@
 #define BINARY_TREE_H
 
 #include <stdbool.h>
-
+#include <omp.h> // Required for OpenMP locks
 typedef struct TreeNode {
     int data;
     struct TreeNode *left;
     struct TreeNode *right;
     /* Add fields here if your synchronization strategy needs them. */
+    omp_lock_t lock;
 } TreeNode;
 
 /* Allocate and return a new node with the given data. */

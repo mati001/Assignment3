@@ -8,10 +8,12 @@ TreeNode *createNode(int data) {
         node->data = data;
         node->left = NULL;
         node->right = NULL;
+        omp_init_lock(&node->lock);
     }
     return node;
 }
 
+//TODO add a lock
 TreeNode *insertNode(TreeNode *root, int data) {
     if (root == NULL) {
         return createNode(data);
@@ -25,14 +27,33 @@ TreeNode *insertNode(TreeNode *root, int data) {
     return root;
 }
 
+
 TreeNode *findMin(TreeNode *root) {
     if (root == NULL) {
         return NULL;
     }
+    omp_set_lock(&root->lock);
     while (root->left != NULL) {
+        omp_set_lock(&root->left->lock);
+        omp_unset_lock(&root->lock);
         root = root->left;
     }
+    omp_unset_lock(&root->lock);
     return root;
+}
+
+bool searchNode(TreeNode *root, int data) {
+    if (root == NULL) {
+        return false;
+    }
+    if (root->data == data) {
+        return true;
+    }
+    if (data < root->data) {
+        return searchNode(root->left, data);
+    } else {
+        return searchNode(root->right, data);
+    }
 }
 
 TreeNode *deleteNode(TreeNode *root, int data) {
@@ -67,19 +88,6 @@ TreeNode *deleteNode(TreeNode *root, int data) {
     return root;
 }
 
-bool searchNode(TreeNode *root, int data) {
-    if (root == NULL) {
-        return false;
-    }
-    if (root->data == data) {
-        return true;
-    }
-    if (data < root->data) {
-        return searchNode(root->left, data);
-    } else {
-        return searchNode(root->right, data);
-    }
-}
 
 void inorderTraversal(TreeNode *root) {
     if (root != NULL) {
@@ -93,6 +101,7 @@ void freeTree(TreeNode *root) {
     if (root != NULL) {
         freeTree(root->left);
         freeTree(root->right);
+        omp_destroy_lock(&root->lock);
         free(root);
     }
 }
