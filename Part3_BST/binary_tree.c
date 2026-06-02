@@ -2,9 +2,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-TreeNode *createNode(int data) {
+TreeNode *createNode(int data)
+{
     TreeNode *node = (TreeNode *)malloc(sizeof(TreeNode));
-    if (node != NULL) {
+    if (node != NULL)
+    {
         node->data = data;
         node->left = NULL;
         node->right = NULL;
@@ -13,27 +15,34 @@ TreeNode *createNode(int data) {
     return node;
 }
 
-//TODO add a lock
-TreeNode *insertNode(TreeNode *root, int data) {
-    if (root == NULL) {
+// TODO add a lock
+TreeNode *insertNode(TreeNode *root, int data)
+{
+    if (root == NULL)
+    {
         return createNode(data);
     }
-    if (data < root->data) {
+    if (data < root->data)
+    {
         root->left = insertNode(root->left, data);
-    } else if (data > root->data) {
+    }
+    else if (data > root->data)
+    {
         root->right = insertNode(root->right, data);
     }
     /* If data == root->data, we typically don't insert duplicates in a standard BST */
     return root;
 }
 
-
-TreeNode *findMin(TreeNode *root) {
-    if (root == NULL) {
+TreeNode *findMin(TreeNode *root)
+{
+    if (root == NULL)
+    {
         return NULL;
     }
     omp_set_lock(&root->lock);
-    while (root->left != NULL) {
+    while (root->left != NULL)
+    {
         omp_set_lock(&root->left->lock);
         omp_unset_lock(&root->lock);
         root = root->left;
@@ -42,35 +51,78 @@ TreeNode *findMin(TreeNode *root) {
     return root;
 }
 
-bool searchNode(TreeNode *root, int data) {
-    if (root == NULL) {
+/* Public API function */
+bool searchNode(TreeNode *root, int data)
+{
+    if (root == NULL)
+    {
         return false;
     }
-    if (root->data == data) {
+    // Lock the root node before passing it to the real function
+    omp_set_lock(&root->lock);
+    return searchNodeHelper(root, data);
+}
+
+bool searchNodeHelper(TreeNode *root, int data)
+{
+    if (root == NULL)
+    {
+        return false;
+    }
+    if (root->data == data)
+    {
+        omp_unset_lock(&root->lock);
         return true;
     }
-    if (data < root->data) {
-        return searchNode(root->left, data);
-    } else {
-        return searchNode(root->right, data);
+    if (data < root->data)
+    {
+        if (root->left == NULL)
+        {
+            omp_unset_lock(&root->lock);
+            return false;
+        }
+        omp_set_lock(&root->left->lock);
+        omp_unset_lock(&root->lock);
+        return searchNodeHelper(root->left, data);
+    }
+    else
+    {
+        if (root->right == NULL)
+        {
+            omp_unset_lock(&root->lock);
+            return false;
+        }
+        omp_set_lock(&root->right->lock);
+        omp_unset_lock(&root->lock);
+        return searchNodeHelper(root->right, data);
     }
 }
 
-TreeNode *deleteNode(TreeNode *root, int data) {
-    if (root == NULL) {
+TreeNode *deleteNode(TreeNode *root, int data)
+{
+    if (root == NULL)
+    {
         return NULL;
     }
-    if (data < root->data) {
+    if (data < root->data)
+    {
         root->left = deleteNode(root->left, data);
-    } else if (data > root->data) {
+    }
+    else if (data > root->data)
+    {
         root->right = deleteNode(root->right, data);
-    } else {
+    }
+    else
+    {
         // Node with only one child or no child
-        if (root->left == NULL) {
+        if (root->left == NULL)
+        {
             TreeNode *temp = root->right;
             free(root);
             return temp;
-        } else if (root->right == NULL) {
+        }
+        else if (root->right == NULL)
+        {
             TreeNode *temp = root->left;
             free(root);
             return temp;
@@ -88,17 +140,20 @@ TreeNode *deleteNode(TreeNode *root, int data) {
     return root;
 }
 
-
-void inorderTraversal(TreeNode *root) {
-    if (root != NULL) {
+void inorderTraversal(TreeNode *root)
+{
+    if (root != NULL)
+    {
         inorderTraversal(root->left);
         printf("%d ", root->data);
         inorderTraversal(root->right);
     }
 }
 
-void freeTree(TreeNode *root) {
-    if (root != NULL) {
+void freeTree(TreeNode *root)
+{
+    if (root != NULL)
+    {
         freeTree(root->left);
         freeTree(root->right);
         omp_destroy_lock(&root->lock);
