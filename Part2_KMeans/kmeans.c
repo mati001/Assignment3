@@ -14,6 +14,7 @@
 #include <omp.h>
 #include <stdlib.h>
 #include <math.h>
+#include <stdio.h>
 int num_t = 1; //
 
 PointSet *createPointSet(int numPoints)
@@ -22,12 +23,8 @@ PointSet *createPointSet(int numPoints)
     PointSet *p = (PointSet *)malloc(sizeof(PointSet));
     p->numPoints = numPoints;
     p->points = (Point *)malloc((size_t)numPoints * sizeof(Point));
-    p->assignments = (int *)malloc((size_t)numPoints * sizeof(int));
-    for (int i = 0; i < numPoints; i++)
-    {
-        p->assignments[i] = 0;
-    }
-    num_t = numPoints/5000;
+    p->assignments = (int *)calloc((size_t)numPoints, sizeof(int));
+    num_t = numPoints / 5000;
     return p;
 }
 
@@ -70,7 +67,7 @@ void assignPointsToClusters(PointSet *data, Centroids *centroids)
     int n = data->numPoints;
     int k = centroids->k;
 
-    #pragma omp for schedule(static)
+#pragma omp for schedule(static)
     for (int i = 0; i < n; i++)
     {
         double bestDist = squaredDistance(data->points[i], centroids->centroids[0]);
@@ -100,8 +97,6 @@ void resetAccumulators(int k, double *sumX, double *sumY, int *counts)
         counts[c] = 0;
     }
 }
-
-
 
 // Accumulates point coordinates into their assigned clusters
 void accumulateClusters(PointSet *data, double *sumX, double *sumY, int *counts, int k)
@@ -171,16 +166,14 @@ int runKMeans(PointSet *data, Centroids *centroids, int maxIters, double toleran
         for (iter = 0; iter < maxIters; iter++)
         {
             assignPointsToClusters(data, centroids);
-#pragma omp barrier
+#pragma omp single
             {
                 resetAccumulators(k, sumX, sumY, counts);
+                sharedMaxMovement = 0.0;
             }
-#pragma omp barrier
             accumulateClusters(data, sumX, sumY, counts, k);
-#pragma omp barrier
-            updateCentroids(centroids, sumX, sumY, counts, &sharedMaxMovement);
-#pragma omp barrier
 
+            updateCentroids(centroids, sumX, sumY, counts, &sharedMaxMovement);
             // All threads check the convergence condition simultaneously
             if (sharedMaxMovement < tolSquared)
             {
@@ -189,18 +182,17 @@ int runKMeans(PointSet *data, Centroids *centroids, int maxIters, double toleran
                 break;
             }
 
-#pragma omp barrier
-#pragma omp single
-            {
-                sharedMaxMovement = 0.0;
-            }
+            // #pragma omp barrier
+            // #pragma omp single
+            //             {
+            //    sharedMaxMovement = 0.0;
+            //             }
         }
 
 // Only one thread safely updates the final count after the loop ends
 #pragma omp single
         {
             final_iter = iter;
-
         }
     }
 
