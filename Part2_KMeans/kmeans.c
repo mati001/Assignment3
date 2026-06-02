@@ -147,38 +147,39 @@ double updateCentroids(Centroids *centroids, double *sumX, double *sumY, int *co
 #pragma omp barrier
     return *sharedMaxMovement;
 }
+
 void assignAndAccumulate(PointSet *data, Centroids *centroids,
                          double *sumX, double *sumY, int *counts, int k)
 {
-    int n = data->numPoints;
+     int n = data->numPoints;
 
-// Pass 1: assign (no race — each thread writes its own i)
-#pragma omp for schedule(static)
+#pragma omp for schedule(static) \
+    reduction(+ : sumX[:k], sumY[:k], counts[:k])
     for (int i = 0; i < n; i++)
     {
-        double bestDist = squaredDistance(data->points[i], centroids->centroids[0]);
+        Point p = data->points[i];
+
+        double bestDist =
+            squaredDistance(p, centroids->centroids[0]);
+
         int bestCluster = 0;
         for (int c = 1; c < k; c++)
         {
-            double d = squaredDistance(data->points[i], centroids->centroids[c]);
+            double d =
+                squaredDistance(p, centroids->centroids[c]);
+
             if (d < bestDist)
             {
                 bestDist = d;
                 bestCluster = c;
             }
         }
-        data->assignments[i] = bestCluster;
-    }
-// implicit barrier — assignments[] fully written before accumulation
 
-// Pass 2: accumulate with reduction (private copies, no contention)
-#pragma omp for schedule(static) reduction(+ : sumX[ : k], sumY[ : k], counts[ : k])
-    for (int i = 0; i < n; i++)
-    {
-        int c = data->assignments[i];
-        sumX[c] += data->points[i].x;
-        sumY[c] += data->points[i].y;
-        counts[c]++;
+        data->assignments[i] = bestCluster;
+
+        sumX[bestCluster] += p.x;
+        sumY[bestCluster] += p.y;
+        counts[bestCluster]++;
     }
 }
 
