@@ -51,18 +51,6 @@ TreeNode *findMin(TreeNode *root)
     return root;
 }
 
-/* Public API function */
-bool searchNode(TreeNode *root, int data)
-{
-    if (root == NULL)
-    {
-        return false;
-    }
-    // Lock the root node before passing it to the real function
-    omp_set_lock(&root->lock);
-    return searchNodeHelper(root, data);
-}
-
 bool searchNodeHelper(TreeNode *root, int data)
 {
     if (root == NULL)
@@ -97,6 +85,18 @@ bool searchNodeHelper(TreeNode *root, int data)
         return searchNodeHelper(root->right, data);
     }
 }
+/* Public API function */
+bool searchNode(TreeNode *root, int data)
+{
+    if (root == NULL)
+    {
+        return false;
+    }
+    // Lock the root node before passing it to the real function
+    omp_set_lock(&root->lock);
+    return searchNodeHelper(root, data);
+}
+
 
 TreeNode *deleteNode(TreeNode *root, int data)
 {
