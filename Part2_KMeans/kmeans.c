@@ -117,7 +117,7 @@ double updateCentroids(Centroids *centroids, double *sumX, double *sumY, int *co
 {
     int k = centroids->k;
     double localMaxMovement = 0.0;
-#pragma omp for schedule(dynamic) nowait //run througth all the centroid and update them and the max movement
+#pragma omp for schedule(dynamic) nowait // run througth all the centroid and update them and the max movement
     for (int c = 0; c < k; c++)
     {
         if (counts[c] == 0)
@@ -147,6 +147,40 @@ double updateCentroids(Centroids *centroids, double *sumX, double *sumY, int *co
 #pragma omp barrier
     return *sharedMaxMovement;
 }
+void assignAndAccumulate(PointSet *data, Centroids *centroids,
+                         double *sumX, double *sumY, int *counts, int k)
+{
+    int n = data->numPoints;
+
+// Pass 1: assign (no race — each thread writes its own i)
+#pragma omp for schedule(static)
+    for (int i = 0; i < n; i++)
+    {
+        double bestDist = squaredDistance(data->points[i], centroids->centroids[0]);
+        int bestCluster = 0;
+        for (int c = 1; c < k; c++)
+        {
+            double d = squaredDistance(data->points[i], centroids->centroids[c]);
+            if (d < bestDist)
+            {
+                bestDist = d;
+                bestCluster = c;
+            }
+        }
+        data->assignments[i] = bestCluster;
+    }
+// implicit barrier — assignments[] fully written before accumulation
+
+// Pass 2: accumulate with reduction (private copies, no contention)
+#pragma omp for schedule(static) reduction(+ : sumX[ : k], sumY[ : k], counts[ : k])
+    for (int i = 0; i < n; i++)
+    {
+        int c = data->assignments[i];
+        sumX[c] += data->points[i].x;
+        sumY[c] += data->points[i].y;
+        counts[c]++;
+    }
+}
 
 int runKMeans(PointSet *data, Centroids *centroids, int maxIters, double tolerance)
 {
@@ -159,39 +193,34 @@ int runKMeans(PointSet *data, Centroids *centroids, int maxIters, double toleran
     const double tolSquared = tolerance * tolerance;
     int final_iter = 0;
     double sharedMaxMovement = 0.0;
+    int iter = 0;
+    int converged = 0;
 
-// Create threads ONCE to avoid overhead
-#pragma omp parallel
+#pragma omp parallel shared(iter, converged, sharedMaxMovement)
     {
-        // iter is private to each thread
-        int iter;
-        for (iter = 0; iter < maxIters; iter++)
+        while (1)
         {
-            assignPointsToClusters(data, centroids);
+// One thread drives the loop counter and convergence flag
 #pragma omp single
             {
                 resetAccumulators(k, sumX, sumY, counts);
                 sharedMaxMovement = 0.0;
             }
-            accumulateClusters(data, sumX, sumY, counts, k);
-
-            updateCentroids(centroids, sumX, sumY, counts, &sharedMaxMovement);
-            // All threads check the convergence condition simultaneously
-            if (sharedMaxMovement < tolSquared)
-            {
-                // Count the current iteration before breaking out of the loop
-                iter++;
+            if (iter >= maxIters)
                 break;
+            assignAndAccumulate(data, centroids, sumX, sumY, counts, k);
+            updateCentroids(centroids, sumX, sumY, counts, &sharedMaxMovement);
+#pragma omp single // One thread updates iter and checks convergence
+            {
+                iter++;
+                if (sharedMaxMovement < tolSquared)
+                    converged = 1;
             }
-        }
-
-// Only one thread safely updates the final count after the loop ends
-#pragma omp single
-        {
-            final_iter = iter;
+            if (converged)
+                break;
         }
     }
-
+    final_iter = iter;
     free(sumX);
     free(sumY);
     free(counts);
