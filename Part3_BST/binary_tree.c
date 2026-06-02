@@ -78,8 +78,37 @@ bool searchNode(TreeNode *root, int data)
     return searchNodeHelper(root, data);
 }
 
-
-
+void insertNodeHelper(TreeNode *root, int data)
+{
+    if (data < root->data)
+    {
+        if (root->left == NULL)
+        {
+            root->left = createNode(data);
+            omp_unset_lock(&root->lock);
+            return;
+        }
+        omp_set_lock(&root->left->lock);
+        omp_unset_lock(&root->lock);
+        insertNodeHelper(root->left, data);
+    }
+    else if (data > root->data)
+    {
+        if (root->right == NULL)
+        {
+            root->right = createNode(data);
+            omp_unset_lock(&root->lock);
+            return;
+        }
+        omp_set_lock(&root->right->lock);
+        omp_unset_lock(&root->lock);
+        insertNodeHelper(root->right, data);
+    }
+    else
+    {
+        omp_unset_lock(&root->lock); // this is in case that the data is duplicate so we do nothing
+    }
+}
 // TODO add a lock
 TreeNode *insertNode(TreeNode *root, int data)
 {
@@ -87,25 +116,14 @@ TreeNode *insertNode(TreeNode *root, int data)
     {
         return createNode(data);
     }
-    if (data < root->data)
-    {
-        root->left = insertNode(root->left, data);
-    }
-    else if (data > root->data)
-    {
-        root->right = insertNode(root->right, data);
-    }
-    /* If data == root->data, we typically don't insert duplicates in a standard BST */
+    omp_set_lock(&root->lock);
+    insertNodeHelper(root, data);
     return root;
 }
 
-// TODO add a lock
-TreeNode *deleteNode(TreeNode *root, int data)
+TreeNode *deleteNodeHelper(TreeNode *root, int data)
 {
-    if (root == NULL)
-    {
-        return NULL;
-    }
+
     if (data < root->data)
     {
         root->left = deleteNode(root->left, data);
@@ -142,7 +160,21 @@ TreeNode *deleteNode(TreeNode *root, int data)
     return root;
 }
 
-//TODO: add a lock
+// TODO add a lock
+TreeNode *deleteNode(TreeNode *root, int data)
+{
+    if (root == NULL)
+    {
+        return NULL;
+    }
+    omp_set_lock(&root->lock);
+
+    root = deleteNodeHelper(root, data);
+
+    return root;
+}
+
+// TODO: add a lock
 void inorderTraversal(TreeNode *root)
 {
     if (root != NULL)
