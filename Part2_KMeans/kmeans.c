@@ -115,10 +115,9 @@ void accumulateClusters(PointSet *data, double *sumX, double *sumY, int *counts,
 // Updates centroids and returns the maximum movement distance
 double updateCentroids(Centroids *centroids, double *sumX, double *sumY, int *counts, double *sharedMaxMovement)
 {
-    // simd use?
     int k = centroids->k;
     double localMaxMovement = 0.0;
-#pragma omp for schedule(dynamic)
+#pragma omp for schedule(dynamic) nowait //run througth all the centroid and update them and the max movement
     for (int c = 0; c < k; c++)
     {
         if (counts[c] == 0)
@@ -135,11 +134,14 @@ double updateCentroids(Centroids *centroids, double *sumX, double *sumY, int *co
         }
         centroids->centroids[c] = updated;
     }
-#pragma omp critical
+    if (localMaxMovement > *sharedMaxMovement)
     {
-        if (localMaxMovement > *sharedMaxMovement)
+#pragma omp critical
         {
-            *sharedMaxMovement = localMaxMovement;
+            if (localMaxMovement > *sharedMaxMovement)
+            {
+                *sharedMaxMovement = localMaxMovement;
+            }
         }
     }
 #pragma omp barrier
@@ -181,12 +183,6 @@ int runKMeans(PointSet *data, Centroids *centroids, int maxIters, double toleran
                 iter++;
                 break;
             }
-
-            // #pragma omp barrier
-            // #pragma omp single
-            //             {
-            //    sharedMaxMovement = 0.0;
-            //             }
         }
 
 // Only one thread safely updates the final count after the loop ends
